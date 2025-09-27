@@ -30,27 +30,24 @@ HEADERS = {
 }
 
 # ----------------------------
-# Initialize session state for rerun workaround
+# Initialize session state
 # ----------------------------
 if "rerun_flag" not in st.session_state:
     st.session_state["rerun_flag"] = False
 
 # ----------------------------
-# Helper functions for GitHub
+# GitHub helpers
 # ----------------------------
 def get_reports():
-    """Fetch reports.json from GitHub"""
     url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{JSON_PATH}"
     r = requests.get(url, headers=HEADERS)
     if r.status_code == 200:
         content = r.json()
         file_sha = content.get("sha")
         data = base64.b64decode(content.get("content", "")).decode()
-        if not data.strip():
-            return [], file_sha
         try:
             return json.loads(data), file_sha
-        except json.JSONDecodeError:
+        except:
             return [], file_sha
     else:
         return [], None
@@ -58,18 +55,18 @@ def get_reports():
 def update_reports(reports, sha, message):
     encoded_json = base64.b64encode(json.dumps(reports, indent=2).encode()).decode()
     url_json = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{JSON_PATH}"
-    r2 = requests.put(url_json, headers=HEADERS, json={
+    r = requests.put(url_json, headers=HEADERS, json={
         "message": message,
         "content": encoded_json,
         "sha": sha
     })
-    if r2.status_code not in [200, 201]:
-        st.error("Failed to update reports.json")
+    if r.status_code not in [200, 201]:
+        st.error(f"Failed to update reports.json: {r.status_code}\n{r.text}")
         st.stop()
     st.session_state["rerun_flag"] = not st.session_state["rerun_flag"]
 
 # ----------------------------
-# Weather & Flood Predictor functions
+# Weather & Flood functions
 # ----------------------------
 def fetch_weather(latitude, longitude):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&hourly=temperature_2m,rain&timezone=Asia/Kolkata"
@@ -138,16 +135,9 @@ def rain_probability(predicted_rain):
     else: return 90
 
 # ----------------------------
-# Geolocation helper
+# Geolocation helper (optional)
 # ----------------------------
 geolocator = Nominatim(user_agent="weather_app")
-def detect_city(lat, lon):
-    try:
-        location = geolocator.reverse((lat, lon), exactly_one=True)
-        address = location.raw.get("address", {})
-        return address.get("city") or address.get("state") or address.get("region")
-    except:
-        return None
 
 # ----------------------------
 # Streamlit Setup
@@ -250,12 +240,9 @@ elif dashboard_type == "Admin":
 # ----------------------------
 else:
     st.header("📸 Community Weather Reports")
-
     current_user = st.text_input("Enter your name (for posting/deleting)", key="current_user")
 
-    # ----------------------------
     # Post a new report
-    # ----------------------------
     with st.form("report_form"):
         caption = st.text_area("Add a caption about current weather (mention city)")
         uploaded_img = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
@@ -277,25 +264,23 @@ else:
                     "content": encoded_image
                 })
                 if r.status_code not in [200, 201]:
-                    st.error("Failed to upload image to GitHub")
+                    st.error(f"Failed to upload image to GitHub: {r.status_code}")
+                    st.code(r.text)
                     st.stop()
 
                 image_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/{file_name}"
-
-                # Fake warning based only on caption text (no lat/lon now)
                 fake_warning = ""
-                detected_city = None  # Not available anymore
                 if "fake" in caption.lower():
                     fake_warning = "⚠️ This post might be suspicious or incorrect."
 
                 new_report = {
-                    "id": max([r.get("id", 0) for r in reports] + [0]) + 1,
+                    "id": max([r.get("id",0) for r in reports]+[0])+1,
                     "name": current_user.strip(),
                     "caption": caption.strip(),
                     "image_url": image_url,
                     "latitude": None,
                     "longitude": None,
-                    "detected_city": detected_city,
+                    "detected_city": None,
                     "fake_warning": fake_warning,
                     "comments": [],
                     "timestamp": datetime.now().isoformat()
@@ -305,9 +290,7 @@ else:
                 update_reports(reports, sha, message=f"Add report {new_report['id']}")
                 st.success("✅ Report posted successfully")
 
-    # ----------------------------
     # Show all reports
-    # ----------------------------
     st.markdown("---")
     st.subheader("All Community Reports")
     reports, sha = get_reports()
@@ -336,6 +319,3 @@ else:
                 if comment_submitted and current_user and comment_text:
                     report.setdefault("comments", []).append(f"{current_user.strip()}: {comment_text.strip()}")
                     update_reports(reports, sha, message=f"Add comment on report {report['id']}")
-
-
-
