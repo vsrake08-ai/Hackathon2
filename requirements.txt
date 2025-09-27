@@ -7,3 +7,4 @@ folium
 cmdstanpy
 streamlit-autorefresh
 geopy
+numpy
