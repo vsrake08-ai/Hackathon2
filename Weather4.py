@@ -39,19 +39,25 @@ if "rerun_flag" not in st.session_state:
 # GitHub helpers
 # ----------------------------
 def get_reports():
+    """Fetch reports.json from GitHub, create if missing"""
     url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{JSON_PATH}"
     r = requests.get(url, headers=HEADERS)
     if r.status_code == 200:
         content = r.json()
         file_sha = content.get("sha")
         data = base64.b64decode(content.get("content", "")).decode()
+        if not data.strip():
+            return [], file_sha
         try:
             return json.loads(data), file_sha
-        except:
+        except json.JSONDecodeError:
             return [], file_sha
+    elif r.status_code == 404:
+        # Create empty reports.json if not found
+        update_reports([], None, message="Create empty reports.json")
+        return [], None
     else:
         return [], None
-
 def update_reports(reports, sha, message):
     encoded_json = base64.b64encode(json.dumps(reports, indent=2).encode()).decode()
     url_json = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{JSON_PATH}"
@@ -319,3 +325,4 @@ else:
                 if comment_submitted and current_user and comment_text:
                     report.setdefault("comments", []).append(f"{current_user.strip()}: {comment_text.strip()}")
                     update_reports(reports, sha, message=f"Add comment on report {report['id']}")
+
