@@ -257,11 +257,10 @@ else:
     # Post a new report
     # ----------------------------
     with st.form("report_form"):
-        caption = st.text_area("Add a caption about current weather (include city)")
-        uploaded_img = st.file_uploader("Upload an image", type=["jpg","jpeg","png"])
-        latitude = st.number_input("Latitude", value=0.0, format="%.6f")
-        longitude = st.number_input("Longitude", value=0.0, format="%.6f")
+        caption = st.text_area("Add a caption about current weather (mention city)")
+        uploaded_img = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
         submitted = st.form_submit_button("Post Report")
+
         if submitted:
             if not current_user or not caption or not uploaded_img:
                 st.error("Please fill all fields and upload an image")
@@ -270,6 +269,8 @@ else:
                 file_name = f"{IMAGES_FOLDER}/{int(datetime.now().timestamp())}_{uploaded_img.name}"
                 file_bytes = uploaded_img.read()
                 encoded_image = base64.b64encode(file_bytes).decode()
+
+                # Upload image to GitHub
                 url_upload = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{file_name}"
                 r = requests.put(url_upload, headers=HEADERS, json={
                     "message": f"Upload image {file_name}",
@@ -278,27 +279,35 @@ else:
                 if r.status_code not in [200, 201]:
                     st.error("Failed to upload image to GitHub")
                     st.stop()
+
                 image_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/{file_name}"
-                detected_city = detect_city(latitude, longitude)
+
+                # Fake warning based only on caption text (no lat/lon now)
                 fake_warning = ""
-                if detected_city and detected_city.lower() not in caption.lower():
-                    fake_warning = "⚠️ Detected city does not match caption! Possible fake post."
+                detected_city = None  # Not available anymore
+                if "fake" in caption.lower():
+                    fake_warning = "⚠️ This post might be suspicious or incorrect."
+
                 new_report = {
-                    "id": max([r.get("id",0) for r in reports]+[0])+1,
+                    "id": max([r.get("id", 0) for r in reports] + [0]) + 1,
                     "name": current_user.strip(),
                     "caption": caption.strip(),
                     "image_url": image_url,
-                    "latitude": latitude,
-                    "longitude": longitude,
+                    "latitude": None,
+                    "longitude": None,
                     "detected_city": detected_city,
                     "fake_warning": fake_warning,
                     "comments": [],
                     "timestamp": datetime.now().isoformat()
                 }
+
                 reports.append(new_report)
                 update_reports(reports, sha, message=f"Add report {new_report['id']}")
                 st.success("✅ Report posted successfully")
 
+    # ----------------------------
+    # Show all reports
+    # ----------------------------
     st.markdown("---")
     st.subheader("All Community Reports")
     reports, sha = get_reports()
@@ -309,6 +318,7 @@ else:
             st.write(f"_Posted at {report['timestamp']}_")
             if report.get("fake_warning"):
                 st.warning(report["fake_warning"])
+
             # Comments section
             if report.get("comments"):
                 st.write("💬 Comments:")
@@ -319,10 +329,13 @@ else:
                         if st.button(f"Delete Comment", key=f"delcomment_{report['id']}_{idx}"):
                             report["comments"].pop(idx)
                             update_reports(reports, sha, message=f"Delete comment {idx} on report {report['id']}")
+
             with st.form(f"comment_form_{report['id']}"):
                 comment_text = st.text_input("Add a comment", key=f"comment_text_{report['id']}")
                 comment_submitted = st.form_submit_button("Post Comment")
                 if comment_submitted and current_user and comment_text:
                     report.setdefault("comments", []).append(f"{current_user.strip()}: {comment_text.strip()}")
                     update_reports(reports, sha, message=f"Add comment on report {report['id']}")
+
+
 
