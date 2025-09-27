@@ -160,7 +160,8 @@ cities_coords = {
     "Delhi": (28.6139, 77.2090),
     "Bangalore": (12.9716, 77.5946),
     "Kolkata": (22.5726, 88.3639),
-    "Chhattisgarh": (21.2951,81.8282)
+    "Chhattisgarh": (21.2951,81.8282),
+    "Chennai":(13.0843, 80.2705)
 }
 
 dashboard_type = st.sidebar.radio("Select Dashboard", ["Citizen/User", "Admin", "Community Reports"])
@@ -324,3 +325,4 @@ else:
                 if comment_submitted and current_user and comment_text:
                     report.setdefault("comments", []).append(f"{current_user.strip()}: {comment_text.strip()}")
                     update_reports(reports, sha, message=f"Add comment on report {report['id']}")
+
